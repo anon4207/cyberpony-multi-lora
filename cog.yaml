@@ -19,5 +19,5 @@ build:
 
   run:
     - curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/download/v0.8.2/pget_linux_x86_64" && chmod +x /usr/local/bin/pget
-image: r8.im/<your-replicate-username>/cyberpony-multi-lora
+image: r8.im/anon4207/cyberpony-multi-lora
 predict: "predict.py:Predictor"
