@@ -28,13 +28,16 @@ def patch_unet_get_aug_embed(unet):
     original_method = unet.get_aug_embed
 
     def patched_method(self, *args, **kwargs):
-        if kwargs.get("added_cond_kwargs") is None:
+        if "added_cond_kwargs" not in kwargs or kwargs["added_cond_kwargs"] is None:
             kwargs["added_cond_kwargs"] = {}
-        elif "text_embeds" not in kwargs["added_cond_kwargs"]:
+        if "text_embeds" not in kwargs["added_cond_kwargs"]:
             kwargs["added_cond_kwargs"]["text_embeds"] = None
+        if "time_ids" not in kwargs["added_cond_kwargs"]:
+            kwargs["added_cond_kwargs"]["time_ids"] = None
         return original_method(*args, **kwargs)
 
     unet.get_aug_embed = MethodType(patched_method, unet)
+
 
 
 MAX_IMAGE_SIZE = 1440
