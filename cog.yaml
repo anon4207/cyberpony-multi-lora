@@ -1,5 +1,4 @@
 image: r8.im/anon4207/cyberpony-multi-lora
-base_image: r8.im/cog-base:cuda11.8.0-cudnn8.6.0-python3.10-torch2.0.0
 
 build:
   python_version: "3.10"
