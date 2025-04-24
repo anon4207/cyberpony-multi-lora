@@ -33,6 +33,7 @@ def patch_pipeline_call(pipe):
         return original_call(*args, **kwargs)
 
     pipe.__call__ = MethodType(patched_call, pipe)
+    pipe.__original_call__ = original_call  # Optional: For debugging or rollback
 
 MAX_IMAGE_SIZE = 1440
 MODEL_CACHE = "cyberrealistic-pony"
