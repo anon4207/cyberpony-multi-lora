@@ -3,3 +3,5 @@ image: r8.im/anon4207/cyberpony-multi-lora
 build:
   python_version: "3.10"
   python_requirements: requirements.txt
+
+predict: "predict.py:Predictor"
