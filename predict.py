@@ -97,6 +97,15 @@ class Predictor(BasePredictor):
             model_path,
             torch_dtype=torch.float16,
         ).to("cuda")
+
+        def patched_call(self, *args, **kwargs):
+            if "added_cond_kwargs" not in kwargs:
+                kwargs["added_cond_kwargs"] = {}
+            return self.__original_call__(*args, **kwargs)
+
+        self.txt2img_pipe.__original_call__ = self.txt2img_pipe.__call__
+        self.txt2img_pipe.__call__ = patched_call.__get__(self.txt2img_pipe, type(self.txt2img_pipe))
+        
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
@@ -112,10 +121,14 @@ class Predictor(BasePredictor):
             feature_extractor=self.txt2img_pipe.feature_extractor,
             requires_safety_checker=False
         ).to("cuda")
+
+        self.img2img_pipe.__original_call__ = self.img2img_pipe.__call__
+        self.img2img_pipe.__call__ = patched_call.__get__(self.img2img_pipe, type(self.img2img_pipe))
+        
         self.img2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
-
+        
         print("setup took:", time.time() - start)
 
     @torch.amp.autocast('cuda')
@@ -343,7 +356,6 @@ class Predictor(BasePredictor):
         output = pipe(
             **common_args, 
             **flux_kwargs,
-            added_cond_kwargs={},  # ✅ ensures the model doesnt choke on NoneType
         )
 
         if not disable_safety_checker:
