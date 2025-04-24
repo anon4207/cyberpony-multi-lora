@@ -17,6 +17,7 @@ from torchvision import transforms
 from weights import WeightsDownloadCache
 from transformers import CLIPImageProcessor
 from lora_loading_patch import load_lora_into_transformer
+from diffusers import StableDiffusionPipeline
 from diffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker
 )
@@ -87,8 +88,8 @@ class Predictor(BasePredictor):
         print("Loading Stable Diffusion txt2img Pipeline")
         if not os.path.exists(MODEL_CACHE):
             download_weights(MODEL_URL, MODEL_CACHE, file=True)
-        self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
-            MODEL_URL,
+        self.txt2img_pipe = StableDiffusionPipeline.from_pretrained(
+            "tomparisbiz/CyberRachel",
             torch_dtype=torch.float16,
             cache_dir=MODEL_CACHE
         ).to("cuda")
@@ -97,9 +98,15 @@ class Predictor(BasePredictor):
         )
 
         print("Loading Stable Diffusion img2img pipeline")
-        self.img2img_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-            MODEL_CACHE,
-            torch_dtype=torch.float16
+        self.img2img_pipe = StableDiffusionImg2ImgPipeline(
+            vae=self.txt2img_pipe.vae,
+            text_encoder=self.txt2img_pipe.text_encoder,
+            tokenizer=self.txt2img_pipe.tokenizer,
+            unet=self.txt2img_pipe.unet,
+            scheduler=self.txt2img_pipe.scheduler,
+            safety_checker=self.txt2img_pipe.safety_checker,
+            feature_extractor=self.txt2img_pipe.feature_extractor,
+            requires_safety_checker=False
         ).to("cuda")
         self.img2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
