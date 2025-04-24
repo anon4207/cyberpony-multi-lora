@@ -367,7 +367,8 @@ class Predictor(BasePredictor):
         inputs = self.txt2img_pipe.tokenizer(
             prompt,
             padding="max_length",
-            max_length=self.txt2img_pipe.tokenizer.model_max_length,
+            max_length=77,
+            truncation=True,
             return_tensors="pt",
         )
         inputs = {k: v.to("cuda") for k, v in inputs.items()}
