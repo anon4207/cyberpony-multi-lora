@@ -15,8 +15,11 @@ jobs:
           token: ${{ secrets.REPLICATE_API_TOKEN }}
 
       # Build & push to Replicate
-      - run: |
-          cog push --use-cuda-base-image=false \
+            - run: |
+          cog push \
+            --use-cog-base-image=false \
+            --use-cuda-base-image=false \
             r8.im/${{ secrets.REPLICATE_USERNAME }}/cyberpony-multi-lora
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+
