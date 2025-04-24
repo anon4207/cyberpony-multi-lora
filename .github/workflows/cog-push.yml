@@ -20,7 +20,7 @@ jobs:
 
       - name: Log in to Replicate
         run: |
-          cog login --token $REPLICATE_API_TOKEN
+          echo "$REPLICATE_API_TOKEN" | cog login --token-stdin
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
 
