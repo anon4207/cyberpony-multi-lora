@@ -6,14 +6,13 @@ import os
 import re
 import time
 import torch
-import subprocess
+import requests
+import tempfile
+import tarfile
 import numpy as np
 from PIL import Image
 from typing import List
-from diffusers import (
-    FluxPipeline,
-    FluxImg2ImgPipeline
-)
+from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
 from torchvision import transforms
 from weights import WeightsDownloadCache
 from transformers import CLIPImageProcessor
@@ -27,7 +26,7 @@ MODEL_CACHE = "cyberrealistic-pony"
 SAFETY_CACHE = "safety-cache"
 FEATURE_EXTRACTOR = "/src/feature-extractor"
 SAFETY_URL = "https://weights.replicate.delivery/default/sdxl/safety-1.0.tar"
-MODEL_URL = "https://huggingface.co/tomparisbiz/CyberRachel/blob/main/cyberrealisticPony_v8.safetensors"
+MODEL_URL = "https://huggingface.co/tomparisbiz/CyberRachel/resolve/main/cyberrealisticPony_v8.safetensors"
 
 ASPECT_RATIOS = {
     "1:1": (1024, 1024),
@@ -45,17 +44,28 @@ ASPECT_RATIOS = {
 
 def download_weights(url, dest, file=False):
     start = time.time()
-    print("downloading url: ", url)
-    print("downloading to: ", dest)
+    print("downloading url:", url)
+    print("downloading to:", dest)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+
     if not file:
-        subprocess.check_call(["pget", "-xf", url, dest], close_fds=False)
+        with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tmp_file:
+            response = requests.get(url, stream=True)
+            for chunk in response.iter_content(chunk_size=8192):
+                tmp_file.write(chunk)
+            tmp_file.flush()
+            with tarfile.open(tmp_file.name, "r") as tar:
+                tar.extractall(dest)
     else:
-        subprocess.check_call(["pget", url, dest], close_fds=False)
-    print("downloading took: ", time.time() - start)
+        response = requests.get(url, stream=True)
+        with open(dest, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+    print("downloading took:", time.time() - start)
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
-        """Load the model into memory to make running multiple predictions efficient"""
         start = time.time()
 
         self.weights_cache = WeightsDownloadCache()
@@ -68,34 +78,29 @@ class Predictor(BasePredictor):
             SAFETY_CACHE, torch_dtype=torch.float16
         ).to("cuda")
         self.feature_extractor = CLIPImageProcessor.from_pretrained(FEATURE_EXTRACTOR)
-        
-        print("Loading Flux txt2img Pipeline")
+
+        print("Loading Stable Diffusion txt2img Pipeline")
         if not os.path.exists(MODEL_CACHE):
             download_weights(MODEL_URL, MODEL_CACHE, file=True)
-        self.txt2img_pipe = FluxPipeline.from_pretrained(
-            MODEL_CACHE,
-            torch_dtype=torch.bfloat16,
+        self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
+            MODEL_URL,
+            torch_dtype=torch.float16,
             cache_dir=MODEL_CACHE
         ).to("cuda")
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
 
-        print("Loading Flux img2img pipeline")
-        self.img2img_pipe = FluxImg2ImgPipeline(
-            transformer=self.txt2img_pipe.transformer,
-            scheduler=self.txt2img_pipe.scheduler,
-            vae=self.txt2img_pipe.vae,
-            text_encoder=self.txt2img_pipe.text_encoder,
-            text_encoder_2=self.txt2img_pipe.text_encoder_2,
-            tokenizer=self.txt2img_pipe.tokenizer,
-            tokenizer_2=self.txt2img_pipe.tokenizer_2,
+        print("Loading Stable Diffusion img2img pipeline")
+        self.img2img_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+            MODEL_CACHE,
+            torch_dtype=torch.float16
         ).to("cuda")
         self.img2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
-        
-        print("setup took: ", time.time() - start)
+
+        print("setup took:", time.time() - start)
 
     @torch.amp.autocast('cuda')
     def run_safety_checker(self, image):
@@ -112,19 +117,20 @@ class Predictor(BasePredictor):
 
     def get_image(self, image: str):
         image = Image.open(image).convert("RGB")
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Lambda(lambda x: 2.0 * x - 1.0),
-            ]
-        )
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: 2.0 * x - 1.0),
+        ])
         img: torch.Tensor = transform(image)
         return img[None, ...]
 
     @staticmethod
     def make_multiple_of_16(n):
         return ((n + 15) // 16) * 16
-    
+
+    # Add your predict() method and load_loras() method here
+    # (Same logic you previously used should still apply.)
+
     def load_loras(self, hf_loras, lora_scales):
         # list of adapter names
         names = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']
