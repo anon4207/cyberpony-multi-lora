@@ -24,16 +24,16 @@ from diffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker
 )
 
-def patch_pipeline_call(pipe):
-    original_call = pipe.__call__
+def patch_unet_get_aug_embed(unet):
+    original_method = unet.get_aug_embed
 
-    def patched_call(self, *args, **kwargs):
-        if "added_cond_kwargs" not in kwargs or kwargs["added_cond_kwargs"] is None:
+    def patched_method(self, *args, **kwargs):
+        added_cond_kwargs = kwargs.get("added_cond_kwargs", {})
+        if added_cond_kwargs is None:
             kwargs["added_cond_kwargs"] = {}
-        return original_call(*args, **kwargs)
+        return original_method(*args, **kwargs)
 
-    pipe.__call__ = MethodType(patched_call, pipe)
-    pipe.__original_call__ = original_call  # Optional: For debugging or rollback
+    unet.get_aug_embed = MethodType(patched_method, unet)
 
 MAX_IMAGE_SIZE = 1440
 MODEL_CACHE = "cyberrealistic-pony"
@@ -111,7 +111,7 @@ class Predictor(BasePredictor):
         ).to("cuda")
 
 
-        patch_pipeline_call(self.txt2img_pipe)
+        patch_unet_get_aug_embed(self.txt2img_pipe.unet)
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
@@ -129,7 +129,7 @@ class Predictor(BasePredictor):
         ).to("cuda")
 
 
-        patch_pipeline_call(self.img2img_pipe)
+        patch_unet_get_aug_embed(self.img2img_pipe.unet)
         self.img2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
