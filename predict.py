@@ -28,7 +28,6 @@ SAFETY_CACHE = "safety-cache"
 FEATURE_EXTRACTOR = "/src/feature-extractor"
 SAFETY_URL = "https://weights.replicate.delivery/default/sdxl/safety-1.0.tar"
 MODEL_URL = "https://huggingface.co/tomparisbiz/CyberRachel/resolve/main/cyberrealisticPony_v8.safetensors"
-MODEL_FILE = os.path.join(MODEL_CACHE, "cyberrealisticPony_v8.safetensors")
 
 ASPECT_RATIOS = {
     "1:1": (1024, 1024),
@@ -87,10 +86,9 @@ class Predictor(BasePredictor):
         self.feature_extractor = CLIPImageProcessor.from_pretrained(FEATURE_EXTRACTOR)
 
         print("Loading Stable Diffusion txt2img Pipeline")
-        if not os.path.exists(MODEL_CACHE):
-            download_weights(MODEL_URL, MODEL_CACHE, file=True)
+
         self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
-            MODEL_FILE,
+            "https://huggingface.co/tomparisbiz/CyberRachel/resolve/main/cyberrealisticPony_v8.safetensors",
             torch_dtype=torch.float16,
         ).to("cuda")
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
