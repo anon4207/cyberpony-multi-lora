@@ -10,6 +10,7 @@ import requests
 import tempfile
 import tarfile
 import numpy as np
+from huggingface_hub import hf_hub_download
 from PIL import Image
 from typing import List
 from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
@@ -28,6 +29,11 @@ SAFETY_CACHE = "safety-cache"
 FEATURE_EXTRACTOR = "/src/feature-extractor"
 SAFETY_URL = "https://weights.replicate.delivery/default/sdxl/safety-1.0.tar"
 MODEL_URL = "https://huggingface.co/tomparisbiz/CyberRachel/resolve/main/cyberrealisticPony_v8.safetensors"
+
+model_path = hf_hub_download(
+    repo_id="tomparisbiz/CyberRachel",
+    filename="cyberrealisticPony_v8.safetensors"
+)
 
 ASPECT_RATIOS = {
     "1:1": (1024, 1024),
@@ -88,7 +94,7 @@ class Predictor(BasePredictor):
         print("Loading Stable Diffusion txt2img Pipeline")
 
         self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
-            "https://huggingface.co/tomparisbiz/CyberRachel/resolve/main/cyberrealisticPony_v8.safetensors",
+            model_path,
             torch_dtype=torch.float16,
         ).to("cuda")
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
