@@ -10,6 +10,7 @@ import requests
 import tempfile
 import tarfile
 import numpy as np
+from types import MethodType
 from huggingface_hub import hf_hub_download
 from PIL import Image
 from typing import List
@@ -22,6 +23,16 @@ from diffusers import StableDiffusionPipeline
 from diffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker
 )
+
+def patch_pipeline_call(pipe):
+    original_call = pipe.__call__
+
+    def patched_call(self, *args, **kwargs):
+        if "added_cond_kwargs" not in kwargs or kwargs["added_cond_kwargs"] is None:
+            kwargs["added_cond_kwargs"] = {}
+        return original_call(*args, **kwargs)
+
+    pipe.__call__ = MethodType(patched_call, pipe)
 
 MAX_IMAGE_SIZE = 1440
 MODEL_CACHE = "cyberrealistic-pony"
@@ -98,14 +109,8 @@ class Predictor(BasePredictor):
             torch_dtype=torch.float16,
         ).to("cuda")
 
-        def patched_call(self, *args, **kwargs):
-            if "added_cond_kwargs" not in kwargs:
-                kwargs["added_cond_kwargs"] = {}
-            return self.__original_call__(*args, **kwargs)
 
-        self.txt2img_pipe.__original_call__ = self.txt2img_pipe.__call__
-        self.txt2img_pipe.__call__ = patched_call.__get__(self.txt2img_pipe, type(self.txt2img_pipe))
-        
+        patch_pipeline_call(self.txt2img_pipe)
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
@@ -122,9 +127,8 @@ class Predictor(BasePredictor):
             requires_safety_checker=False
         ).to("cuda")
 
-        self.img2img_pipe.__original_call__ = self.img2img_pipe.__call__
-        self.img2img_pipe.__call__ = patched_call.__get__(self.img2img_pipe, type(self.img2img_pipe))
-        
+
+        patch_pipeline_call(self.img2img_pipe)
         self.img2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
         )
