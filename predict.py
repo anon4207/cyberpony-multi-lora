@@ -46,9 +46,10 @@ def download_weights(url, dest, file=False):
     start = time.time()
     print("downloading url:", url)
     print("downloading to:", dest)
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
 
     if not file:
+        # dest is a folder to extract into
+        os.makedirs(dest, exist_ok=True)
         with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tmp_file:
             response = requests.get(url, stream=True)
             for chunk in response.iter_content(chunk_size=8192):
@@ -57,12 +58,15 @@ def download_weights(url, dest, file=False):
             with tarfile.open(tmp_file.name, "r") as tar:
                 tar.extractall(dest)
     else:
+        # dest is a file path
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
         response = requests.get(url, stream=True)
         with open(dest, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
     print("downloading took:", time.time() - start)
+
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
