@@ -6,6 +6,8 @@ build:
   cuda: "12.4"
   python_version: "3.11"
   python_requirements: requirements.txt
+  environment:
+    - HF_HUB_TOKEN=${HF_HUB_TOKEN}
 
   run:
     - curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/download/v0.8.2/pget_linux_x86_64" && chmod +x /usr/local/bin/pget
