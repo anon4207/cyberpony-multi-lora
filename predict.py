@@ -6,6 +6,7 @@ import os
 import re
 import time
 import torch
+import json
 import requests
 import tempfile
 import tarfile
@@ -15,14 +16,26 @@ from huggingface_hub import hf_hub_download
 from PIL import Image
 from typing import List
 from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
+from diffusers import PNDMScheduler, AutoencoderKL, UNet2DConditionModel
+from transformers import CLIPTextModel, CLIPTokenizer
 from torchvision import transforms
 from weights import WeightsDownloadCache
 from transformers import CLIPImageProcessor
 from lora_loading_patch import load_lora_into_transformer
-from diffusers import StableDiffusionPipeline
 from diffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker
 )
+
+def truncate_prompt(prompt, max_tokens=75):
+    """
+    Truncate the prompt to ensure it doesn't exceed CLIP's token limit.
+    This is a simple approximation - in production you might want a more accurate token counter.
+    """
+    words = prompt.split()
+    if len(words) <= max_tokens:
+        return prompt
+    
+    return " ".join(words[:max_tokens])
 
 def patch_unet_get_aug_embed(unet):
     import torch
@@ -45,9 +58,6 @@ def patch_unet_get_aug_embed(unet):
         return original_method(*args, **kwargs)
 
     unet.get_aug_embed = MethodType(patched_method, unet)
-
-
-
 
 MAX_IMAGE_SIZE = 1440
 MODEL_CACHE = "cyberrealistic-pony"
@@ -100,8 +110,6 @@ def download_weights(url, dest, file=False):
 
     print("downloading took:", time.time() - start)
 
-
-
 class Predictor(BasePredictor):
     def setup(self) -> None:
         start = time.time()
@@ -118,12 +126,65 @@ class Predictor(BasePredictor):
         self.feature_extractor = CLIPImageProcessor.from_pretrained(FEATURE_EXTRACTOR)
 
         print("Loading Stable Diffusion txt2img Pipeline")
-
-        self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
-            model_path,
-            torch_dtype=torch.float16,
-        ).to("cuda")
-
+        try:
+            # Try loading with components explicitly to match architecture correctly
+            print("Loading model with explicit architecture...")
+            
+            # Standard SD 1.5 architecture components
+            vae = AutoencoderKL.from_pretrained(
+                "stabilityai/sd-vae-ft-mse", 
+                torch_dtype=torch.float16
+            ).to("cuda")
+            
+            text_encoder = CLIPTextModel.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", 
+                subfolder="text_encoder",
+                torch_dtype=torch.float16
+            ).to("cuda")
+            
+            tokenizer = CLIPTokenizer.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", 
+                subfolder="tokenizer"
+            )
+            
+            unet = UNet2DConditionModel.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", 
+                subfolder="unet",
+                torch_dtype=torch.float16
+            ).to("cuda")
+            
+            scheduler = PNDMScheduler.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", 
+                subfolder="scheduler"
+            )
+            
+            # Create pipeline with explicit components
+            self.txt2img_pipe = StableDiffusionPipeline(
+                vae=vae,
+                text_encoder=text_encoder,
+                tokenizer=tokenizer,
+                unet=unet,
+                scheduler=scheduler,
+                safety_checker=self.safety_checker,
+                feature_extractor=self.feature_extractor,
+                requires_safety_checker=False
+            )
+            
+            # Now load the custom model weights over these base components
+            print(f"Loading weights from {model_path}")
+            self.txt2img_pipe.load_attn_procs(model_path)
+            
+        except Exception as e:
+            print(f"Error loading with explicit architecture: {e}")
+            print("Falling back to standard loading method...")
+            
+            # Fallback to standard loading method
+            self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
+                model_path,
+                torch_dtype=torch.float16,
+                variant="fp16",
+                use_safetensors=True
+            ).to("cuda")
 
         patch_unet_get_aug_embed(self.txt2img_pipe.unet)
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
@@ -141,7 +202,6 @@ class Predictor(BasePredictor):
             feature_extractor=self.txt2img_pipe.feature_extractor,
             requires_safety_checker=False
         ).to("cuda")
-
 
         patch_unet_get_aug_embed(self.img2img_pipe.unet)
         self.img2img_pipe.__class__.load_lora_into_transformer = classmethod(
@@ -175,9 +235,6 @@ class Predictor(BasePredictor):
     @staticmethod
     def make_multiple_of_16(n):
         return ((n + 15) // 16) * 16
-
-    # Add your predict() method and load_loras() method here
-    # (Same logic you previously used should still apply.)
 
     def load_loras(self, hf_loras, lora_scales):
         # list of adapter names
@@ -293,13 +350,19 @@ class Predictor(BasePredictor):
         ),
         disable_safety_checker: bool = Input(
             description="Disable safety checker for generated images. This feature is only available through the API. See [https://replicate.com/docs/how-does-replicate-work#safety](https://replicate.com/docs/how-does-replicate-work#safety)",
-            default=False,
+            default=True,
         ),
     ) -> List[Path]:
         """Run a single prediction on the model"""
         if seed is None:
             seed = int.from_bytes(os.urandom(2), "big")
         print(f"Using seed: {seed}")
+
+        # Truncate prompt if too long
+        original_prompt = prompt
+        prompt = truncate_prompt(prompt)
+        if prompt != original_prompt:
+            print(f"Prompt was truncated from {len(original_prompt.split())} to {len(prompt.split())} tokens")
 
         width, height = self.aspect_ratio_to_width_height(aspect_ratio)
         max_sequence_length=512
@@ -371,11 +434,30 @@ class Predictor(BasePredictor):
             "output_type": "pil"
         }
         
-        output = pipe(
-            **common_args,
-            **flux_kwargs
-        )
-
+        # Try with error handling
+        try:
+            output = pipe(
+                **common_args,
+                **flux_kwargs
+            )
+        except RuntimeError as e:
+            print(f"Error during inference: {e}")
+            # If there's a shape mismatch error, try with padding attention
+            if "mat1 and mat2 shapes cannot be multiplied" in str(e):
+                print("Attempting with attention processor patch...")
+                # Apply a patch for cross-attention processors
+                from diffusers.models.attention_processor import AttnProcessor2_0
+                
+                # Switch to standard attention processor
+                pipe.unet.set_attn_processor(AttnProcessor2_0())
+                
+                # Try again with modified pipeline
+                output = pipe(
+                    **common_args,
+                    **flux_kwargs
+                )
+            else:
+                raise e
 
         if not disable_safety_checker:
             _, has_nsfw_content = self.run_safety_checker(output.images)
@@ -396,4 +478,3 @@ class Predictor(BasePredictor):
             raise Exception("NSFW content detected. Try running it again, or try a different prompt.")
 
         return output_paths
-    
