@@ -6,21 +6,24 @@ on:
 jobs:
   push:
     runs-on: ubuntu-latest
+
     steps:
-      # 1️⃣  Check out your code
+      # 1) Check out your code
       - uses: actions/checkout@v4
 
-      # 2️⃣  Install the Cog CLI
+      # 2) Install the Cog CLI
       - uses: replicate/setup-cog@v2
         with:
           token: ${{ secrets.REPLICATE_API_TOKEN }}
 
-      # 3️⃣  Build & push your model (note the same indent as the two steps above)
+      # 3) Build the image (CPU-only base) and push it to Replicate
       - name: Build and push to Replicate
         run: |
           cog push \
             --use-cog-base-image=false \
             --use-cuda-base-image=false \
+            --cuda-version=11.8 \
+            --cudnn-version=8.6.0 \
             r8.im/${{ secrets.REPLICATE_USERNAME }}/cyberpony-multi-lora
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
