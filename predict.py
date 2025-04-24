@@ -89,9 +89,8 @@ class Predictor(BasePredictor):
         if not os.path.exists(MODEL_CACHE):
             download_weights(MODEL_URL, MODEL_CACHE, file=True)
         self.txt2img_pipe = StableDiffusionPipeline.from_single_file(
-            "https://huggingface.co/tomparisbiz/CyberRachel/resolve/main/cyberrealisticPony_v8.safetensors",
+            MODEL_CACHE,
             torch_dtype=torch.float16,
-            cache_dir=MODEL_CACHE
         ).to("cuda")
         self.txt2img_pipe.__class__.load_lora_into_transformer = classmethod(
             load_lora_into_transformer
