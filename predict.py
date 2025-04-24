@@ -363,16 +363,23 @@ class Predictor(BasePredictor):
 
         generator = torch.Generator("cuda").manual_seed(seed)
 
-        # Prepare extended conditioning if needed
-        inputs = self.txt2img_pipe.tokenizer(
-            prompt,
-            padding="max_length",
-            max_length=77,
-            truncation=True,
-            return_tensors="pt",
+        # Tokenize for both encoders
+        text_inputs_1 = self.txt2img_pipe.tokenizer(
+            prompt, padding="max_length", max_length=77, truncation=True, return_tensors="pt"
         )
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
-        text_embeds = self.txt2img_pipe.text_encoder(**inputs)[0]
+        text_inputs_2 = self.txt2img_pipe.tokenizer_2(
+            prompt, padding="max_length", max_length=77, truncation=True, return_tensors="pt"
+        )
+        
+        text_inputs_1 = {k: v.to("cuda") for k, v in text_inputs_1.items()}
+        text_inputs_2 = {k: v.to("cuda") for k, v in text_inputs_2.items()}
+        
+        text_embeds_1 = self.txt2img_pipe.text_encoder(**text_inputs_1)[0]
+        text_embeds_2 = self.txt2img_pipe.text_encoder_2(**text_inputs_2)[0]
+        
+        # Final SDXL-style combined embeddings
+        text_embeds = torch.cat([text_embeds_1, text_embeds_2], dim=-1)  # Should result in 2048
+
         time_ids = torch.zeros((len(prompt) if isinstance(prompt, list) else 1, 6), device="cuda")
 
         added_cond_kwargs = {
