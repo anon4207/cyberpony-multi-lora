@@ -340,7 +340,11 @@ class Predictor(BasePredictor):
             "output_type": "pil"
         }
 
-        output = pipe(**common_args, **flux_kwargs)
+        output = pipe(
+            **common_args, 
+            **flux_kwargs,
+            added_cond_kwargs={},  # ✅ ensures the model doesn’t choke on NoneType
+        )
 
         if not disable_safety_checker:
             _, has_nsfw_content = self.run_safety_checker(output.images)
