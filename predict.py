@@ -363,44 +363,19 @@ class Predictor(BasePredictor):
 
         generator = torch.Generator("cuda").manual_seed(seed)
 
-        # Tokenize for both encoders
-        text_inputs_1 = self.txt2img_pipe.tokenizer(
-            prompt, padding="max_length", max_length=77, truncation=True, return_tensors="pt"
-        )
-        text_inputs_2 = self.txt2img_pipe.tokenizer_2(
-            prompt, padding="max_length", max_length=77, truncation=True, return_tensors="pt"
-        )
-        
-        text_inputs_1 = {k: v.to("cuda") for k, v in text_inputs_1.items()}
-        text_inputs_2 = {k: v.to("cuda") for k, v in text_inputs_2.items()}
-        
-        text_embeds_1 = self.txt2img_pipe.text_encoder(**text_inputs_1)[0]
-        text_embeds_2 = self.txt2img_pipe.text_encoder_2(**text_inputs_2)[0]
-        
-        # Final SDXL-style combined embeddings
-        text_embeds = torch.cat([text_embeds_1, text_embeds_2], dim=-1)  # Should result in 2048
-
-        time_ids = torch.zeros((len(prompt) if isinstance(prompt, list) else 1, 6), device="cuda")
-
-        added_cond_kwargs = {
-            "text_embeds": text_embeds,
-            "time_ids": time_ids,
-        }
-
         common_args = {
             "prompt": [prompt] * num_outputs,
             "guidance_scale": guidance_scale,
             "generator": generator,
             "num_inference_steps": num_inference_steps,
-            "max_sequence_length": max_sequence_length,
             "output_type": "pil"
         }
-
+        
         output = pipe(
-            **common_args, 
-            **flux_kwargs,
-            added_cond_kwargs=added_cond_kwargs,
+            **common_args,
+            **flux_kwargs
         )
+
 
         if not disable_safety_checker:
             _, has_nsfw_content = self.run_safety_checker(output.images)
