@@ -25,18 +25,27 @@ from diffusers.pipelines.stable_diffusion.safety_checker import (
 )
 
 def patch_unet_get_aug_embed(unet):
+    import torch
     original_method = unet.get_aug_embed
 
     def patched_method(self, *args, **kwargs):
         if "added_cond_kwargs" not in kwargs or kwargs["added_cond_kwargs"] is None:
             kwargs["added_cond_kwargs"] = {}
-        if "text_embeds" not in kwargs["added_cond_kwargs"]:
-            kwargs["added_cond_kwargs"]["text_embeds"] = None
-        if "time_ids" not in kwargs["added_cond_kwargs"]:
-            kwargs["added_cond_kwargs"]["time_ids"] = None
+
+        conds = kwargs["added_cond_kwargs"]
+
+        if "text_embeds" not in conds:
+            batch_size = kwargs["sample"].shape[0] if "sample" in kwargs else 1
+            conds["text_embeds"] = torch.zeros((batch_size, 1280), device=self.device)
+
+        if "time_ids" not in conds:
+            batch_size = kwargs["sample"].shape[0] if "sample" in kwargs else 1
+            conds["time_ids"] = torch.zeros((batch_size, 6), device=self.device, dtype=torch.long)
+
         return original_method(*args, **kwargs)
 
     unet.get_aug_embed = MethodType(patched_method, unet)
+
 
 
 
