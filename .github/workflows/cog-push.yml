@@ -15,7 +15,7 @@ jobs:
           token: ${{ secrets.REPLICATE_API_TOKEN }}
 
       # Build & push to Replicate
-            - run: |
+        - run: |
           cog push \
             --use-cog-base-image=false \
             --use-cuda-base-image=false \
