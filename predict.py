@@ -363,6 +363,22 @@ class Predictor(BasePredictor):
 
         generator = torch.Generator("cuda").manual_seed(seed)
 
+        # Prepare extended conditioning if needed
+        inputs = self.txt2img_pipe.tokenizer(
+            prompt,
+            padding="max_length",
+            max_length=self.txt2img_pipe.tokenizer.model_max_length,
+            return_tensors="pt",
+        )
+        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        text_embeds = self.txt2img_pipe.text_encoder(**inputs)[0]
+        time_ids = torch.zeros((len(prompt) if isinstance(prompt, list) else 1, 6), device="cuda")
+
+        added_cond_kwargs = {
+            "text_embeds": text_embeds,
+            "time_ids": time_ids,
+        }
+
         common_args = {
             "prompt": [prompt] * num_outputs,
             "guidance_scale": guidance_scale,
@@ -375,6 +391,7 @@ class Predictor(BasePredictor):
         output = pipe(
             **common_args, 
             **flux_kwargs,
+            added_cond_kwargs=added_cond_kwargs,
         )
 
         if not disable_safety_checker:
