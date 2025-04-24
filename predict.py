@@ -343,7 +343,7 @@ class Predictor(BasePredictor):
         output = pipe(
             **common_args, 
             **flux_kwargs,
-            added_cond_kwargs={},  # ✅ ensures the model doesn’t choke on NoneType
+            added_cond_kwargs={},  # ✅ ensures the model doesnt choke on NoneType
         )
 
         if not disable_safety_checker:
