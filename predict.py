@@ -28,12 +28,14 @@ def patch_unet_get_aug_embed(unet):
     original_method = unet.get_aug_embed
 
     def patched_method(self, *args, **kwargs):
-        added_cond_kwargs = kwargs.get("added_cond_kwargs", {})
-        if added_cond_kwargs is None:
+        if kwargs.get("added_cond_kwargs") is None:
             kwargs["added_cond_kwargs"] = {}
+        elif "text_embeds" not in kwargs["added_cond_kwargs"]:
+            kwargs["added_cond_kwargs"]["text_embeds"] = None
         return original_method(*args, **kwargs)
 
     unet.get_aug_embed = MethodType(patched_method, unet)
+
 
 MAX_IMAGE_SIZE = 1440
 MODEL_CACHE = "cyberrealistic-pony"
