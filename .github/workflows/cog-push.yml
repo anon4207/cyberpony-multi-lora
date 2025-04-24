@@ -10,21 +10,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 🛠️ Use the latest dev build of Cog from GitHub
-      - name: Install dev version of Cog
+      # ✅ Install Cog pre-release binary that supports --cuda-version
+      - name: Install Cog dev binary
         run: |
-          curl -L https://github.com/replicate/cog/releases/download/v0.15.0-dev.2/cog_Linux_x86_64 -o cog
+          curl -L https://github.com/replicate/cog/releases/download/v0.14.2-rc.4/cog_Linux_x86_64 -o cog
           chmod +x cog
           sudo mv cog /usr/local/bin/cog
           cog --version
 
-      # 🚀 Push using known good CUDA/cuDNN version
+      # 🚀 Build & push using CUDA 11.8
       - name: Build and push to Replicate
         run: |
           cog push \
+            --use-cog-base-image=false \
             --cuda-version=11.8 \
             --cudnn-version=8.6.0 \
-            --use-cog-base-image=false \
             r8.im/${{ secrets.REPLICATE_USERNAME }}/cyberpony-multi-lora
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
