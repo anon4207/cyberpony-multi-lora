@@ -1,0 +1,23 @@
+name: Cog Remote Push
+
+# You will launch the build manually from the Actions tab
+on:
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # installs the latest Cog CLI on the runner
+      - uses: replicate/setup-cog@v1
+
+      # build & push
+      - run: |
+          cog push r8.im/${{ secrets.REPLICATE_USERNAME }}/cyberpony-multi-lora
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+
+
+Add remote build workflow
