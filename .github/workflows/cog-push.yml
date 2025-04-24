@@ -10,7 +10,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: replicate/setup-cog@v1
+      # ✅ Safe installer — no legacy CUDA cache
+      - uses: replicate/setup-cog@v2
         with:
           token: ${{ secrets.REPLICATE_API_TOKEN }}
 
