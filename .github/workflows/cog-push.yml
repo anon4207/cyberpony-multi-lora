@@ -10,9 +10,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: replicate/setup-cog@v1
-        with:
-          token: ${{ secrets.REPLICATE_API_TOKEN }}
+      # ✅ Install Cog v0.14.2 (confirmed: works and has binary)
+      - name: Install Cog v0.14.2
+        run: |
+          mkdir -p /tmp/cog-bin
+          curl -L https://github.com/replicate/cog/releases/download/v0.14.2/cog_Linux_x86_64 -o /tmp/cog-bin/cog
+          chmod +x /tmp/cog-bin/cog
+          echo "/tmp/cog-bin" >> $GITHUB_PATH
+          /tmp/cog-bin/cog --version
 
       - name: Build and push to Replicate
         run: |
