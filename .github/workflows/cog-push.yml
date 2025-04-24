@@ -10,15 +10,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: replicate/setup-cog@v2
-        with:
-          token: ${{ secrets.REPLICATE_API_TOKEN }}
+      # 🛠️ Use the latest dev build of Cog from GitHub
+      - name: Install dev version of Cog
+        run: |
+          curl -L https://github.com/replicate/cog/releases/download/v0.15.0-dev.2/cog_Linux_x86_64 -o cog
+          chmod +x cog
+          sudo mv cog /usr/local/bin/cog
+          cog --version
 
+      # 🚀 Push using known good CUDA/cuDNN version
       - name: Build and push to Replicate
         run: |
           cog push \
+            --cuda-version=11.8 \
+            --cudnn-version=8.6.0 \
             --use-cog-base-image=false \
-            --use-cuda-base-image=true \
             r8.im/${{ secrets.REPLICATE_USERNAME }}/cyberpony-multi-lora
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
